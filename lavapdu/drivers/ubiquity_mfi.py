@@ -19,6 +19,7 @@
 
 import logging
 from paramiko import SSHClient
+from paramiko.ssh_exception import SSHException
 from lavapdu.drivers.driver import PDUDriver
 log = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class UbiquityBase(PDUDriver):
 
     def connect(self):
         log.info("Connecting to Ubiquity mfi %s@%s:%d",
-                self.username, self.hostname, self.sshport)
+                 self.username, self.hostname, self.sshport)
         self.client = SSHClient()
         self.client.load_system_host_keys()
         self.client.connect(hostname=self.hostname, port=self.sshport,
@@ -56,14 +57,18 @@ class UbiquityBase(PDUDriver):
         log.debug("Running port_interaction from UbiquityBase")
         if port_number > self.port_count:
             raise RuntimeError("We only have ports 1 - %d. %d > maxPorts (%d)"
-                    % self.port_count, port_number, self.port_count)
+                               % self.port_count, port_number, self.port_count)
 
         if command == "on":
-            command = "bash -c 'echo 1 > /proc/power/relay%d'" % port_number
+            command = "sh -c 'echo 1 > /proc/power/relay%d'" % port_number
         elif command == "off":
-            command = "bash -c 'echo 0 > /proc/power/relay%d'" % port_number
-        
-        self.client.exec_command(command, bufsize=-1, timeout=3)
+            command = "sh -c 'echo 0 > /proc/power/relay%d'" % port_number
+
+        try:
+            stdin, stdout, stderr = self.client.exec_command(command, bufsize=-1, timeout=3)
+            stdin.close()
+        except SSHException as exc:
+            pass
 
     def _cleanup(self):
         self.client.close()
@@ -78,7 +83,7 @@ class UbiquityBase(PDUDriver):
 
 class Ubiquity3Port(UbiquityBase):
     port_count = 3
-    
+
     @classmethod
     def accepts(cls, drivername):
         log.debug(drivername)
@@ -88,7 +93,7 @@ class Ubiquity3Port(UbiquityBase):
 
 class Ubiquity6Port(UbiquityBase):
     port_count = 6
-    
+
     @classmethod
     def accepts(cls, drivername):
         log.debug(drivername)
